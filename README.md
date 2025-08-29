@@ -5,6 +5,6 @@ The Golgi apparatus in cells acts as a sorting, packaging, and distribution cent
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-export EXA_API_KEY= a97b054d-7c9a-4400-96ad-484668fec0c5
+export EXA_API_KEY="your_key"
 streamlit run streamlit_app.py
 ```
