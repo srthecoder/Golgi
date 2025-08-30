@@ -26,6 +26,3 @@ The Golgi apparatus in cells acts as a sorting, packaging, and distribution cent
 ## 🛡️ Disclaimer
 
 Golgi is a prototype for research and educational purposes only. It is not a clinical decision support tool. Always verify information from trusted medical sources before making healthcare decisions.
-
-## 👤 Author
-**GitHub:** @srthecoder | **LinkedIn:** [Swachandrika Rudra](https://www.linkedin.com/in/swachandrika-rudra/)
