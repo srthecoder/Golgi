@@ -192,13 +192,10 @@ with st.sidebar:
 
 # st.image("assets/logo.png", width=220)
 st.markdown("#### Making healthcare searchable")
-query = st.text_input(" ", placeholder="SGLT2 inhibitors CKD stage 3")
-run = st.button("Search")
-
 base_q = st.text_input("Query", placeholder="SGLT2 inhibitors CKD stage 3")
 q = f"{base_q} {' '.join(chips)}".strip()
-
 run = st.button("Search", type="primary", use_container_width=True)
+
 if run:
     with st.spinner("Searching…"):
         rows = exa_search(q, num=int(k), since=since.strip() or None, mode=mode)
