@@ -182,7 +182,7 @@ def render_hero(logo_path="assets/logo.png", width_px=320, tagline="Making healt
       .golgi-tagline {{ text-align:center; font-size:1.1rem; color:#444; margin-bottom:18px; }}
     </style>
     """
-    p = Path(logo_path)
+    p = Path('/Users/rika/Downloads/Golgi/assets/logo.png')
     if p.exists():
         b64 = base64.b64encode(p.read_bytes()).decode()
         html = f'''
