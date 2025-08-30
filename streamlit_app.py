@@ -11,10 +11,8 @@ ALLOW = [
     "nejm.org","jamanetwork.com","thelancet.com","bmj.com","nature.com",
     "fda.gov","ema.europa.eu","clinicaltrials.gov","cochranelibrary.com",
 ]
-EXCLUDE = [
-    "wikipedia.org","twitter.com","x.com","facebook.com","reddit.com",
-    "medium.com","quora.com","linkedin.com","youtube.com"
-]
+# EXCLUDE kept for future non-content searches; not used with `text=` to avoid 400s.
+EXCLUDE = ["wikipedia.org","twitter.com","x.com","facebook.com","reddit.com","medium.com","quora.com","linkedin.com","youtube.com"]
 
 def _fetch(url: str, timeout=10) -> str:
     try:
@@ -44,11 +42,10 @@ def _topk(query: str, text: str, k: int = 5) -> list[str]:
     return [sents[i] for i in idx]
 
 def _get_exa_key() -> str:
-    if os.getenv("EXA_API_KEY"): return os.environ["EXA_API_KEY"]
-    try: return st.secrets["EXA_API_KEY"]  # type: ignore[index]
-    except Exception:
-        st.error("Missing EXA_API_KEY (env var or .streamlit/secrets.toml).")
-        st.stop()
+    key = os.getenv("EXA_API_KEY") or st.secrets.get("EXA_API_KEY", "")
+    if not key:
+        st.error("Missing EXA_API_KEY (env var or .streamlit/secrets.toml)."); st.stop()
+    return key
 
 @st.cache_resource
 def _exa() -> Exa:
@@ -57,47 +54,50 @@ def _exa() -> Exa:
 @st.cache_data(show_spinner=False)
 def exa_search(query: str, num: int, since: str | None, use_filters: bool):
     exa = _exa()
-    include = ALLOW if use_filters else None
-    exclude = EXCLUDE if use_filters else None
+    opts = dict(
+        query=query,
+        num_results=num,
+        type="auto",
+        use_autoprompt=True,
+        text={"max_characters": 5000},   # <-- requesting content
+    )
+    if since: opts["start_published_date"] = since
+    # IMPORTANT: with `text`, pass ONLY ONE of includeDomains/excludeDomains.
+    if use_filters:
+        opts["include_domains"] = ALLOW  # do NOT set exclude_domains here
 
-    # Try full-feature search first
     try:
-        return exa.search_and_contents(
-            query=query,
-            num_results=num,
-            include_domains=include,
-            exclude_domains=exclude,
-            start_published_date=(since or None),
-            type="auto",                 # more permissive than "neural"
-            use_autoprompt=True,
-            text={"max_characters": 5000},
-        ).results
+        res = exa.search_and_contents(**opts)
+        return res.results
     except Exception as e:
-        # Show raw API error for debugging, then fall back to minimal call
-        st.warning(f"Exa error (full search): {e}")
-        return exa.search_and_contents(
-            query=query,
-            num_results=num,
-            type="auto",
-            text={"max_characters": 4000},
-        ).results
+        # Fallback: no content (no `text`), allow exclude_domains
+        st.warning(f"Exa error (with content): {e}")
+        opts.pop("text", None)
+        if not use_filters:
+            opts["exclude_domains"] = EXCLUDE
+        try:
+            res = exa.search(**opts)  # returns results without content
+            return res.results
+        except Exception as e2:
+            st.error(f"Exa failed: {e2}")
+            return []
 
 def render_results(q: str, results: list):
     if not results:
-        st.info("No results.")
-        return
+        st.info("No results."); return
     for r in results:
         url = getattr(r, "url", "")
         title = getattr(r, "title", "") or url
         published = getattr(r, "published_date", None)
-        txt = getattr(r, "text", None) or _clean(_fetch(url))
-        snippet = " ".join(_topk(q, txt, 5)) if txt else ""
+        text = getattr(r, "text", None)
+        if not text:  # if fallback path returned no content, fetch-clean
+            text = _clean(_fetch(url))
+        snippet = " ".join(_topk(q, text, 5)) if text else ""
         with st.container(border=True):
             st.markdown(f"**[{title}]({url})**")
             if published: st.caption(str(published))
             if snippet: st.write(snippet)
 
-# --- UI ---
 st.set_page_config(page_title="Golgi — Healthcare Evidence Search", page_icon="🧬", layout="centered")
 st.title("Golgi — Healthcare Evidence Search")
 
