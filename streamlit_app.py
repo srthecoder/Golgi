@@ -7,16 +7,29 @@ from readability import Document
 from bs4 import BeautifulSoup
 from rank_bm25 import BM25Okapi
 
-# --- page setup ---
-st.set_page_config(
-    page_title="Golgi — Making healthcare searchable",
-    page_icon="assets/logo.png",   # favicon
-    layout="wide"
-)
+# --- page config ---
+st.set_page_config(page_title="Golgi", page_icon="assets/logo.png", layout="centered")
 
-# --- header branding ---
-st.image("assets/logo.png", width=160)
-st.title("Golgi — Making healthcare searchable")
+# --- custom CSS for centering ---
+st.markdown("""
+    <style>
+    .block-container {padding-top: 5%; text-align: center;}
+    .stTextInput > div > div > input {
+        font-size: 1.2rem; padding: 0.6rem;
+        border-radius: 20px; border: 1px solid #ccc;
+        text-align: center;
+    }
+    .stButton>button {
+        font-size: 1.1rem; padding: 0.5rem 2rem;
+        border-radius: 20px; background-color: #ef4444; color: white;
+        border: none;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- header ---
+st.image("assets/logo.png", width=220)
+st.markdown("### Making healthcare searchable")
 
 CLINICAL_ALLOW = [
     "nih.gov","ncbi.nlm.nih.gov","pubmed.ncbi.nlm.nih.gov","cdc.gov","who.int",
