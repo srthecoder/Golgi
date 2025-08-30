@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# streamlit_app.py — Golgi (researcher view, fixed charts + limited citations)
+# streamlit_app.py — Golgi (researcher view: evidence-type pie + filter)
 from __future__ import annotations
 import os, re, io, json, csv, requests, tldextract, streamlit as st, altair as alt
 from dateutil import parser as dtp
@@ -8,7 +8,6 @@ from readability import Document
 from bs4 import BeautifulSoup
 from rank_bm25 import BM25Okapi
 
-# ---------- domain modes ----------
 CLINICAL_ALLOW = [
     "nih.gov","ncbi.nlm.nih.gov","pubmed.ncbi.nlm.nih.gov","cdc.gov","who.int",
     "nejm.org","jamanetwork.com","thelancet.com","bmj.com","nature.com",
@@ -29,7 +28,7 @@ SYNONYMS = {
     "systematic": ["systematic review","meta-analysis","evidence synthesis"],
 }
 
-# ---------- utils ----------
+# ----- utils -----
 def _fetch(url: str, timeout=8) -> str:
     try:
         r = requests.get(url, timeout=timeout, headers={"User-Agent":"Golgi/1.0"}); r.raise_for_status()
@@ -113,7 +112,7 @@ def _download_blob(rows: list[dict], kind: str):
     for r in rows: w.writerow({k:r.get(k,"") for k in w.fieldnames})
     return "text/csv", buf.getvalue().encode()
 
-# ---------- Exa ----------
+# ----- Exa -----
 def _get_exa_key() -> str:
     key = os.getenv("EXA_API_KEY") or st.secrets.get("EXA_API_KEY", "")
     if not key:
@@ -130,10 +129,8 @@ def exa_search(query: str, num: int, since: str | None, mode: str):
     opts = dict(query=_expand_query(query), num_results=num, type="auto", use_autoprompt=True, text={"max_characters": 5000})
     if since: opts["start_published_date"] = since
     clinical = mode.startswith("Clinical")
-    if clinical:
-        opts["include_domains"] = CLINICAL_ALLOW     # with text: ONLY one of include/exclude
-    else:
-        opts["exclude_domains"] = EXCLUDE_JUNK
+    if clinical: opts["include_domains"] = CLINICAL_ALLOW
+    else:        opts["exclude_domains"] = EXCLUDE_JUNK
     res = exa.search_and_contents(**opts).results
 
     rows = []
@@ -153,20 +150,17 @@ def exa_overview(query: str, since: str|None, mode: str, max_citations: int) -> 
     opts = dict(query=query, text=True)
     if since: opts["start_published_date"] = since
     try:
-        if mode.startswith("Clinical"):
-            opts["include_domains"] = CLINICAL_ALLOW
-        else:
-            opts["exclude_domains"] = EXCLUDE_JUNK
+        if mode.startswith("Clinical"): opts["include_domains"] = CLINICAL_ALLOW
+        else:                            opts["exclude_domains"] = EXCLUDE_JUNK
         ans = exa.answer(**opts)
     except Exception as e:
         st.warning(f"Overview failed with filters: {e}")
         ans = exa.answer(query=query, text=True)
-
     cites_all = [{"title": c.title, "url": c.url} for c in (getattr(ans, "citations", []) or [])]
     cites = cites_all[:max(0, int(max_citations))]
     return {"answer": getattr(ans, "answer", "") or "", "citations": cites}
 
-# ---------- UI ----------
+# ----- UI -----
 st.set_page_config(page_title="Golgi — Research Mode", page_icon="🧬", layout="wide")
 st.title("Golgi — Healthcare Evidence Search")
 
@@ -175,22 +169,23 @@ with st.sidebar:
     chips = st.multiselect("Quick terms", ["guideline","systematic review","randomized controlled trial","contraindications","pregnancy","perioperative","dose"], default=["guideline"])
     since = st.text_input("Since (YYYY[-MM[-DD]])", "")
     k = st.slider("Results", 1, 50, 15)
-    show_images = st.checkbox("Result images", True)
-    show_charts = st.checkbox("Charts", True)
     want_overview = st.checkbox("High-level overview", True)
+    # NEW: evidence type filter (multi)
+    all_types = ["Guideline","Systematic Review","Trial/Registry","Article/Other"]
+    type_filter = st.multiselect("Filter by evidence type", options=all_types, default=all_types)
 
 base_q = st.text_input("Query", placeholder="SGLT2 inhibitors CKD stage 3")
 q = f"{base_q} {' '.join(chips)}".strip()
 
-c1, c2 = st.columns([1,1])
-run = c1.button("Search", type="primary", use_container_width=True)
-if c2.button("Clear", use_container_width=True): st.experimental_rerun()
-
+run = st.button("Search", type="primary", use_container_width=True)
 if run:
     with st.spinner("Searching…"):
         rows = exa_search(q, num=int(k), since=since.strip() or None, mode=mode)
 
-    # ---- overview (limit citations to slider k)
+    # apply evidence-type filter
+    rows = [r for r in rows if r["type"] in type_filter]
+
+    # overview (limit citations to slider k)
     if want_overview:
         with st.status("Generating overview…", expanded=False) as s:
             ov = exa_overview(q, since=since.strip() or None, mode=mode, max_citations=int(k))
@@ -202,70 +197,74 @@ if run:
             for c in ov["citations"]:
                 st.markdown(f"- [{c['title']}]({c['url']})")
 
-    # ---- stats
+    # stats
     st.subheader("Stats")
     total = len(rows)
     types, years, domains = {}, {}, {}
     for r in rows:
         types[r["type"]] = types.get(r["type"], 0) + 1
-        y = _year_from(r["published"]);  years[y] = years.get(y, 0) + 1 if y else years.get(y, 0)
-        d = _domain(r["url"]);          domains[d] = domains.get(d, 0) + 1
+        y = _year_from(r["published"]); 
+        if y: years[y] = years.get(y, 0) + 1
+        d = _domain(r["url"]); domains[d] = domains.get(d, 0) + 1
     avg_score = round(sum(r["score"] for r in rows)/total, 3) if rows else 0.0
     m1, m2, m3 = st.columns(3)
     m1.metric("Results", total)
     m2.metric("Avg confidence", avg_score)
     m3.metric("Guidelines", types.get("Guideline", 0))
 
-    # ---- charts (Altair-safe: use alt.Data(values=...), guard empties)
-    if show_charts and rows:
-        cols = st.columns(3)
+    # charts (pie + bars; guard empties)
+    st.subheader("Analytics")
+    cols = st.columns(3)
 
-        dom_data = [{"domain":k, "count":v} for k,v in sorted(domains.items(), key=lambda x:-x[1])[:20]]
-        if dom_data:
-            dom_chart = alt.Chart(alt.Data(values=dom_data)).mark_bar().encode(
-                x=alt.X("count:Q", title="Results"),
-                y=alt.Y("domain:N", sort='-x', title="Domain")
-            )
-            cols[0].altair_chart(dom_chart, use_container_width=True)
-        else:
-            cols[0].info("No domain data")
+    # Pie: evidence type distribution
+    pie_data = [{"type": k, "count": v} for k, v in sorted(types.items(), key=lambda x: -x[1])]
+    if pie_data:
+        pie = alt.Chart(alt.Data(values=pie_data)).mark_arc(outerRadius=110).encode(
+            theta=alt.Theta("count:Q", stack=True),
+            color=alt.Color("type:N", legend=alt.Legend(title="Evidence Type")),
+            tooltip=["type:N","count:Q"],
+        )
+        cols[0].altair_chart(pie, use_container_width=True)
+    else:
+        cols[0].info("No type data")
 
-        yr_data = [{"year":k, "count":v} for k,v in sorted({k:v for k,v in years.items() if k}.items())]
-        if yr_data:
-            yr_chart = alt.Chart(alt.Data(values=yr_data)).mark_bar().encode(
-                x=alt.X("year:O", title="Year"),
-                y=alt.Y("count:Q", title="Count")
-            )
-            cols[1].altair_chart(yr_chart, use_container_width=True)
-        else:
-            cols[1].info("No year data")
+    # Domain bar
+    dom_data = [{"domain":k, "count":v} for k,v in sorted(domains.items(), key=lambda x:-x[1])[:20]]
+    if dom_data:
+        dom_chart = alt.Chart(alt.Data(values=dom_data)).mark_bar().encode(
+            x=alt.X("count:Q", title="Results"),
+            y=alt.Y("domain:N", sort='-x', title="Domain"),
+            tooltip=["domain:N","count:Q"],
+        )
+        cols[1].altair_chart(dom_chart, use_container_width=True)
+    else:
+        cols[1].info("No domain data")
 
-        sc_data = [{"rank": i+1, "score": float(r["score"])} for i,r in enumerate(rows)]
-        if sc_data:
-            sc_chart = alt.Chart(alt.Data(values=sc_data)).mark_line(point=True).encode(
-                x=alt.X("rank:Q", title="Rank"),
-                y=alt.Y("score:Q", title="Confidence")
-            )
-            cols[2].altair_chart(sc_chart, use_container_width=True)
-        else:
-            cols[2].info("No score data")
+    # Score curve
+    sc_data = [{"rank": i+1, "score": float(r["score"])} for i,r in enumerate(rows)]
+    if sc_data:
+        sc_chart = alt.Chart(alt.Data(values=sc_data)).mark_line(point=True).encode(
+            x=alt.X("rank:Q", title="Rank"),
+            y=alt.Y("score:Q", title="Confidence"),
+            tooltip=["rank:Q","score:Q"],
+        )
+        cols[2].altair_chart(sc_chart, use_container_width=True)
+    else:
+        cols[2].info("No score data")
 
-    # ---- exports
+    # exports
     st.subheader("Export")
     mime, blob = _download_blob(rows, "json"); st.download_button("Download JSON", data=blob, file_name="golgi_results.json", mime=mime)
     mime, blob = _download_blob(rows, "csv");  st.download_button("Download CSV",  data=blob, file_name="golgi_results.csv",  mime=mime)
 
-    # ---- results
+    # results
     st.subheader("Results")
     if not rows: st.info("No results.")
     for i, r in enumerate(rows, 1):
         with st.container(border=True):
-            header = f"**{i}. [{r['title']}]({r['url']})** · _{r['type']}_ · **{r['score']}**"
-            st.markdown(header)
+            st.markdown(f"**{i}. [{r['title']}]({r['url']})** · _{r['type']}_ · **{r['score']}**")
             if r.get("published"): st.caption(str(r["published"]))
-            cols = st.columns([4,1]) if st.session_state.get("show_images", True) else [st]
-            with (cols[0] if len(cols) == 2 else cols[0]):
-                st.write(r["summary"] or "")
-            if len(cols) == 2:
-                img = _og_image(r["url"])
-                if img: cols[1].image(img, use_column_width=True)
+            cols2 = st.columns([4,1])
+            with cols2[0]: st.write(r["summary"] or "")
+            img = _og_image(r["url"])
+            if img: cols2[1].image(img, use_column_width=True)
