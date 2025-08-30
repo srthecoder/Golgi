@@ -179,11 +179,8 @@ def exa_overview(query: str, since: str|None, mode: str, max_citations: int) -> 
     return {"answer": getattr(ans, "answer", "") or "", "citations": cites}
 
 # ---------- UI ----------
-# -------- MAIN: clean landing --------
-st.image("assets/logo.png", width=220)
-st.markdown("#### Making healthcare searchable")
-query = st.text_input(" ", placeholder="SGLT2 inhibitors CKD stage 3")
-run = st.button("Search")
+st.set_page_config(page_title="Golgi — Research Mode", page_icon="🧬", layout="wide")
+st.title("Golgi — Healthcare Evidence Search")
 
 with st.sidebar:
     mode = st.radio("Mode", ["Clinical (strict)","Scholar (broad)"], index=0)
