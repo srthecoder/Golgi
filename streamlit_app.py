@@ -158,22 +158,16 @@ def exa_overview(query: str, since: str|None, mode: str, max_citations: int) -> 
     return {"answer": getattr(ans, "answer", "") or "", "citations": cites}
 
 # ---------- UI ----------
-# -------- MAIN: clean landing --------
 with st.sidebar:
     mode = st.radio("Mode", ["Clinical (strict)","Scholar (broad)"], index=0)
     chips = st.multiselect("Quick terms", ["guideline","systematic review","randomized controlled trial","contraindications","pregnancy","perioperative","dose"], default=["guideline"])
     since = st.text_input("Since (YYYY[-MM[-DD]])", "")
     k = st.slider("Results", 1, 50, 15)
     want_overview = st.checkbox("High-level overview", True)
-    # evidence-type filter
     all_types = ["Guideline","Systematic Review","Trial/Registry","Article/Other"]
     type_filter = st.multiselect("Filter by evidence type", options=all_types, default=all_types)
 
-# === HERO (no leading indentation → no code block) ===
-import base64, textwrap
-from pathlib import Path
-
-# --- DROP-IN FIX: render hero via components (no Markdown parsing → no code block) ---
+# Logo
 import base64
 from pathlib import Path
 from streamlit.components.v1 import html as st_html
@@ -197,10 +191,9 @@ def render_hero(logo_path="assets/logo.png", width_px=320, tagline="Making healt
   </div>
 </div>
         """,
-        height=int(width_px * 0.6) + 40,  # adjust if you change width_px
+        height=int(width_px * 0.6) + 40,
     )
 
-# Call this right ABOVE your search input; remove any extra markdown title/tagline around it.
 render_hero("assets/logo.png", width_px=340)
 
 # search bar 
@@ -227,7 +220,7 @@ if run:
             for c in ov["citations"]:
                 st.markdown(f"- [{c['title']}]({c['url']})")
 
-    # metrics (no guidelines metric)
+    # metrics
     st.subheader("Stats")
     total = len(rows)
     avg_score = round(sum(r["score"] for r in rows)/total, 3) if rows else 0.0
@@ -282,7 +275,7 @@ if run:
     mime, blob = _download_blob(rows, "json"); st.download_button("Download JSON", data=blob, file_name="golgi_results.json", mime=mime)
     mime, blob = _download_blob(rows, "csv");  st.download_button("Download CSV",  data=blob, file_name="golgi_results.csv",  mime=mime)
 
-    # results (images kept)
+    # results
     st.subheader("Results")
     if not rows: st.info("No results.")
     for i, r in enumerate(rows, 1):
