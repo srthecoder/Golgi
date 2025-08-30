@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-# streamlit_app.py — Golgi (researcher view: images kept, no guidelines graph; source counts, confidence, pie)
+st.set_page_config(
+    page_title="Golgi — Making healthcare searchable",
+    page_icon="assets/logo.png",   # favicon
+    layout="wide"
+)
+
+st.image("assets/logo.png", width=160)
+st.title("Golgi — Making healthcare searchable")
+
 from __future__ import annotations
 import os, re, io, json, csv, requests, tldextract, streamlit as st, altair as alt
 from dateutil import parser as dtp
