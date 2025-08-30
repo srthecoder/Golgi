@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 import os, re, io, json, csv, requests, tldextract, streamlit as st, altair as alt
 from dateutil import parser as dtp
 from exa_py import Exa
@@ -7,30 +6,26 @@ from readability import Document
 from bs4 import BeautifulSoup
 from rank_bm25 import BM25Okapi
 
-# --- page config ---
-st.set_page_config(page_title="Golgi", page_icon="assets/logo.png", layout="centered")
+# --- page config (only once) ---
+st.set_page_config(page_title="Golgi — Healthcare Evidence Search", page_icon="assets/logo.png", layout="centered")
 
-# --- custom CSS for centering ---
+# --- brand CSS + landing look ---
 st.markdown("""
-    <style>
-    .block-container {padding-top: 5%; text-align: center;}
-    .stTextInput > div > div > input {
-        font-size: 1.2rem; padding: 0.6rem;
-        border-radius: 20px; border: 1px solid #ccc;
-        text-align: center;
-    }
-    .stButton>button {
-        font-size: 1.1rem; padding: 0.5rem 2rem;
-        border-radius: 20px; background-color: #ef4444; color: white;
-        border: none;
-    }
-    </style>
+<style>
+.block-container {padding-top: 4%; text-align: center;}
+h1,h2,h3 {text-align:center}
+input[type="text"] {text-align:center}
+.stTextInput > div > div > input {
+  font-size: 1.2rem; padding: 0.8rem 1.2rem; border-radius: 28px; border: 1px solid #d0d0d0;
+}
+.stButton>button {
+  font-size: 1.05rem; padding: 0.6rem 2.4rem; border-radius: 28px; background:#ef4444; color:#fff; border:0;
+}
+.card {text-align:left}
+</style>
 """, unsafe_allow_html=True)
 
-# --- header ---
-st.image("assets/logo.png", width=220)
-st.markdown("### Making healthcare searchable")
-
+# ---------------- domain config ----------------
 CLINICAL_ALLOW = [
     "nih.gov","ncbi.nlm.nih.gov","pubmed.ncbi.nlm.nih.gov","cdc.gov","who.int",
     "nejm.org","jamanetwork.com","thelancet.com","bmj.com","nature.com",
@@ -42,16 +37,13 @@ CLINICAL_ALLOW = [
 EXCLUDE_JUNK = ["twitter.com","x.com","facebook.com","reddit.com","quora.com","linkedin.com","youtube.com","pinterest.com"]
 
 SYNONYMS = {
-    "mi": ["myocardial infarction","heart attack","stemi","nstemi"],
-    "htn": ["hypertension","high blood pressure"],
-    "ckd": ["chronic kidney disease","renal insufficiency"],
-    "dm": ["diabetes mellitus","type 2 diabetes","t2d","type 1 diabetes","t1d"],
-    "rct": ["randomized controlled trial","randomised controlled trial","clinical trial"],
     "guideline": ["practice guideline","consensus statement","recommendation"],
-    "systematic": ["systematic review","meta-analysis","evidence synthesis"],
+    "systematic": ["systematic review","meta-analysis","evidence synthesis","cochrane"],
+    "rct": ["randomized controlled trial","randomised controlled trial","clinical trial","phase iii","phase ii","phase i"],
+    "pregnancy": ["pregnant","gestation"],
 }
 
-# ---------- utils ----------
+# ---------------- helpers ----------------
 def _fetch(url: str, timeout=8) -> str:
     try:
         r = requests.get(url, timeout=timeout, headers={"User-Agent":"Golgi/1.0"}); r.raise_for_status()
@@ -79,28 +71,19 @@ def _topk(query: str, text: str, k: int = 4) -> list[str]:
     idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
     return [sents[i] for i in idx]
 
-def _og_image(url: str) -> str | None:
-    try:
-        html = _fetch(url, timeout=5)
-        if not html: return None
-        s = BeautifulSoup(html, "html.parser")
-        og = s.find("meta", property="og:image") or s.find("meta", attrs={"name":"twitter:image"})
-        if og and og.get("content"): return og["content"]
-        fav = s.find("link", rel=lambda x: x and "icon" in x.lower())
-        if fav and fav.get("href"):
-            href = fav["href"]; base = re.match(r"(https?://[^/]+)", url)
-            return href if href.startswith("http") else (base.group(1)+href if base else None)
-        return None
-    except Exception:
-        return None
-
 def _domain(url: str) -> str:
     ext = tldextract.extract(url); return ".".join([p for p in [ext.domain, ext.suffix] if p])
 
-def _expand_query(q: str) -> str:
-    ql = q.lower()
-    extra = sorted({t for k,vs in SYNONYMS.items() if k in ql for t in vs})
-    return f"({q}) OR ({' OR '.join(extra)})" if extra else q
+def _expand_query(q: str, boosters: list[str]) -> str:
+    # Append boosters + synonyms (OR-expanded)
+    q2 = q
+    for b in boosters:
+        q2 += f" {b}"
+    extra = []
+    for b in boosters:
+        extra += SYNONYMS.get(b, [])
+    extra = sorted(set(extra))
+    return f"({q2}) OR ({' OR '.join(extra)})" if extra else q2
 
 def _year_from(val) -> int | None:
     if not val: return None
@@ -134,24 +117,18 @@ def _download_blob(rows: list[dict], kind: str):
     for r in rows: w.writerow({k:r.get(k,"") for k in w.fieldnames})
     return "text/csv", buf.getvalue().encode()
 
-# ---------- Exa ----------
-def _get_exa_key() -> str:
+# ---------------- Exa ----------------
+def _exa() -> Exa:
     key = os.getenv("EXA_API_KEY") or st.secrets.get("EXA_API_KEY", "")
-    if not key:
-        st.error("Missing EXA_API_KEY (env or .streamlit/secrets.toml)"); st.stop()
-    return key
+    if not key: st.error("Missing EXA_API_KEY"); st.stop()
+    return Exa(api_key=key)
 
-@st.cache_resource
-def _exa() -> Exa: return Exa(api_key=_get_exa_key())
-
-@st.cache_data(show_spinner=False)
 def exa_search(query: str, num: int, since: str | None, mode: str):
     exa = _exa()
-    opts = dict(query=_expand_query(query), num_results=num, type="auto", use_autoprompt=True, text={"max_characters": 5000})
+    opts = dict(query=query, num_results=num, type="auto", use_autoprompt=True, text={"max_characters": 5000})
     if since: opts["start_published_date"] = since
-    clinical = mode.startswith("Clinical")
-    if clinical: opts["include_domains"] = CLINICAL_ALLOW
-    else:        opts["exclude_domains"] = EXCLUDE_JUNK
+    if mode == "Clinical": opts["include_domains"] = CLINICAL_ALLOW   # with text: only one of include/exclude
+    else:                   opts["exclude_domains"] = EXCLUDE_JUNK
     res = exa.search_and_contents(**opts).results
 
     rows = []
@@ -161,64 +138,63 @@ def exa_search(query: str, num: int, since: str | None, mode: str):
         text = getattr(r,"text", None) or _clean(_fetch(url))
         snippet = " ".join(_topk(query, text, 4)) if text else ""
         ctype = _content_type(title, url)
-        score = _confidence(query, text, url, published, clinical)
+        score = _confidence(query, text, url, published, mode=="Clinical")
         rows.append({"title": title, "url": url, "published": published, "type": ctype, "score": score, "summary": snippet})
     return rows
 
-@st.cache_data(show_spinner=False)
-def exa_overview(query: str, since: str|None, mode: str, max_citations: int) -> dict:
+def exa_overview(query: str, since: str | None, mode: str, max_cites: int) -> dict:
     exa = _exa()
     opts = dict(query=query, text=True)
     if since: opts["start_published_date"] = since
     try:
-        if mode.startswith("Clinical"): opts["include_domains"] = CLINICAL_ALLOW
-        else:                            opts["exclude_domains"] = EXCLUDE_JUNK
+        if mode == "Clinical": opts["include_domains"] = CLINICAL_ALLOW
+        else:                  opts["exclude_domains"] = EXCLUDE_JUNK
         ans = exa.answer(**opts)
-    except Exception as e:
-        st.warning(f"Overview failed with filters: {e}")
+    except Exception:
         ans = exa.answer(query=query, text=True)
-    cites_all = [{"title": c.title, "url": c.url} for c in (getattr(ans, "citations", []) or [])]
-    cites = cites_all[:max(0, int(max_citations))]
-    return {"answer": getattr(ans, "answer", "") or "", "citations": cites}
+    cites = [{"title": c.title, "url": c.url} for c in (getattr(ans,"citations",[]) or [])][:max_cites]
+    return {"answer": getattr(ans,"answer","") or "", "citations": cites}
 
-# ---------- UI ----------
-st.set_page_config(page_title="Golgi — Research Mode", page_icon="🧬", layout="wide")
-st.title("Golgi — Healthcare Evidence Search")
+# ---------------- Landing ----------------
+st.image("assets/logo.png", width=220)
+st.markdown("#### Making healthcare searchable")
 
-with st.sidebar:
-    mode = st.radio("Mode", ["Clinical (strict)","Scholar (broad)"], index=0)
-    chips = st.multiselect("Quick terms", ["guideline","systematic review","randomized controlled trial","contraindications","pregnancy","perioperative","dose"], default=["guideline"])
-    since = st.text_input("Since (YYYY[-MM[-DD]])", "")
-    k = st.slider("Results", 1, 50, 15)
-    want_overview = st.checkbox("High-level overview", True)
-    # evidence-type filter
-    all_types = ["Guideline","Systematic Review","Trial/Registry","Article/Other"]
-    type_filter = st.multiselect("Filter by evidence type", options=all_types, default=all_types)
+# Search controls (centered)
+q = st.text_input(" ", placeholder="SGLT2 inhibitors CKD stage 3")
+c1, c2, c3 = st.columns([1,1,1])
+with c1: mode = st.radio("Mode", ["Clinical","Scholar"], horizontal=True, index=0)
+with c2: since = st.text_input("Since (YYYY[-MM[-DD]])", "")
+with c3: k = st.slider("Results", 1, 50, 15)
 
-base_q = st.text_input("Query", placeholder="SGLT2 inhibitors CKD stage 3")
-q = f"{base_q} {' '.join(chips)}".strip()
+boosters = st.multiselect("Query boosters (optional)", ["guideline","systematic","rct","pregnancy"], help="Adds terms & synonyms to bias results.")
+run = st.button("Search")
 
-run = st.button("Search", type="primary", use_container_width=True)
-if run:
+if run and q.strip():
+    # swap to wide layout feel for results
+    st.markdown("<style>.block-container{max-width: 1200px;}</style>", unsafe_allow_html=True)
+
+    # expanded query
+    q2 = _expand_query(q.strip(), boosters)
+
     with st.spinner("Searching…"):
-        rows = exa_search(q, num=int(k), since=since.strip() or None, mode=mode)
+        rows = exa_search(q2, num=int(k), since=since.strip() or None, mode=mode)
 
-    # filter by evidence type
-    rows = [r for r in rows if r["type"] in type_filter]
+    # Evidence-type filter (if user clears all → treat as all)
+    all_types = ["Guideline","Systematic Review","Trial/Registry","Article/Other"]
+    filt = st.multiselect("Filter by evidence type", all_types, default=all_types)
+    if not filt: filt = all_types
+    rows = [r for r in rows if r["type"] in filt]
 
-    # overview
-    if want_overview:
-        with st.status("Generating overview…", expanded=False) as s:
-            ov = exa_overview(q, since=since.strip() or None, mode=mode, max_citations=int(k))
-            s.update(label="Overview ready", state="complete")
-        st.subheader("Overview")
-        st.write(ov["answer"] or "_No summary returned._")
-        if ov["citations"]:
-            st.caption("Sources:")
-            for c in ov["citations"]:
-                st.markdown(f"- [{c['title']}]({c['url']})")
+    # Overview (cited)
+    ov = exa_overview(q2, since=since.strip() or None, mode=mode, max_cites=int(k))
+    st.subheader("Overview")
+    st.write(ov["answer"] or "_No summary returned._")
+    if ov["citations"]:
+        st.caption("Sources:")
+        for c in ov["citations"]:
+            st.markdown(f"- [{c['title']}]({c['url']})")
 
-    # metrics (no guidelines metric)
+    # Stats
     st.subheader("Stats")
     total = len(rows)
     avg_score = round(sum(r["score"] for r in rows)/total, 3) if rows else 0.0
@@ -226,61 +202,68 @@ if run:
     m1.metric("Results", total)
     m2.metric("Avg confidence", avg_score)
 
-    # analytics: pie (type), bar (domains), line (confidence)
-    st.subheader("Analytics")
-    # aggregate
+    # Analytics tabs (pie + source counts + confidence)
     types, domains = {}, {}
     for r in rows:
         types[r["type"]] = types.get(r["type"], 0) + 1
         d = _domain(r["url"]); domains[d] = domains.get(d, 0) + 1
 
-    cols = st.columns(3)
-    pie_data = [{"type": k, "count": v} for k, v in sorted(types.items(), key=lambda x: -x[1])]
-    if pie_data:
-        pie = alt.Chart(alt.Data(values=pie_data)).mark_arc(outerRadius=110).encode(
-            theta=alt.Theta("count:Q", stack=True),
-            color=alt.Color("type:N", legend=alt.Legend(title="Evidence Type")),
-            tooltip=["type:N","count:Q"],
-        )
-        cols[0].altair_chart(pie, use_container_width=True)
-    else:
-        cols[0].info("No type data")
+    tab1, tab2, tab3 = st.tabs(["Evidence types", "Source counts", "Confidence curve"])
+
+    pie_data = [{"type": k, "count": v} for k,v in sorted(types.items(), key=lambda x:-x[1])]
+    with tab1:
+        if pie_data:
+            pie = alt.Chart(alt.Data(values=pie_data)).mark_arc().encode(
+                theta=alt.Theta("count:Q", stack=True),
+                color=alt.Color("type:N", legend=alt.Legend(title="Evidence Type")),
+                tooltip=["type:N","count:Q"],
+            ).properties(width='container', height=300)
+            st.altair_chart(pie, use_container_width=True)
+        else:
+            st.info("No type data")
 
     dom_data = [{"domain":k, "count":v} for k,v in sorted(domains.items(), key=lambda x:-x[1])[:20]]
-    if dom_data:
-        dom_chart = alt.Chart(alt.Data(values=dom_data)).mark_bar().encode(
-            x=alt.X("count:Q", title="Results"),
-            y=alt.Y("domain:N", sort='-x', title="Domain"),
-            tooltip=["domain:N","count:Q"],
-        )
-        cols[1].altair_chart(dom_chart, use_container_width=True)
-    else:
-        cols[1].info("No domain data")
+    with tab2:
+        if dom_data:
+            dom_chart = alt.Chart(alt.Data(values=dom_data)).mark_bar().encode(
+                x=alt.X("count:Q", title="Results"),
+                y=alt.Y("domain:N", sort='-x', title="Domain"),
+                tooltip=["domain:N","count:Q"],
+            ).properties(width='container', height=300)
+            st.altair_chart(dom_chart, use_container_width=True)
+        else:
+            st.info("No domain data")
 
     sc_data = [{"rank": i+1, "score": float(r["score"])} for i,r in enumerate(rows)]
-    if sc_data:
-        sc_chart = alt.Chart(alt.Data(values=sc_data)).mark_line(point=True).encode(
-            x=alt.X("rank:Q", title="Rank"),
-            y=alt.Y("score:Q", title="Confidence"),
-            tooltip=["rank:Q","score:Q"],
-        )
-        cols[2].altair_chart(sc_chart, use_container_width=True)
-    else:
-        cols[2].info("No score data")
+    with tab3:
+        if sc_data:
+            sc_chart = alt.Chart(alt.Data(values=sc_data)).mark_line(point=True).encode(
+                x=alt.X("rank:Q", title="Rank"),
+                y=alt.Y("score:Q", title="Confidence"),
+                tooltip=["rank:Q","score:Q"],
+            ).properties(width='container', height=300)
+            st.altair_chart(sc_chart, use_container_width=True)
+        else:
+            st.info("No score data")
 
-    # export
+    # Export
     st.subheader("Export")
     mime, blob = _download_blob(rows, "json"); st.download_button("Download JSON", data=blob, file_name="golgi_results.json", mime=mime)
     mime, blob = _download_blob(rows, "csv");  st.download_button("Download CSV",  data=blob, file_name="golgi_results.csv",  mime=mime)
 
-    # results (images kept)
+    # Results (cards w/ images)
     st.subheader("Results")
     if not rows: st.info("No results.")
     for i, r in enumerate(rows, 1):
-        with st.container(border=True):
-            st.markdown(f"**{i}. [{r['title']}]({r['url']})** · _{r['type']}_ · **{r['score']}**")
+        with st.container():
+            st.markdown(f"**{i}. [{r['title']}]({r['url']})** · _{r['type']}_ · **{r['score']}**", help=_domain(r["url"]))
             if r.get("published"): st.caption(str(r["published"]))
-            cols2 = st.columns([4,1])
-            with cols2[0]: st.write(r["summary"] or "")
-            img = _og_image(r["url"])
-            if img: cols2[1].image(img, use_column_width=True)
+            cols = st.columns([4,1])
+            with cols[0]: st.write(r["summary"] or "")
+            try:
+                html = _fetch(r["url"], timeout=5)
+                s = BeautifulSoup(html, "html.parser")
+                img = (s.find("meta", property="og:image") or s.find("meta", attrs={"name":"twitter:image"}))
+                if img and img.get("content"): cols[1].image(img["content"], use_column_width=True)
+            except Exception:
+                pass
