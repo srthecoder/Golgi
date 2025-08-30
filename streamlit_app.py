@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# streamlit_app.py — Golgi (researcher view: evidence-type pie + filter)
+# streamlit_app.py — Golgi (researcher view: images kept, no guidelines graph; source counts, confidence, pie)
 from __future__ import annotations
 import os, re, io, json, csv, requests, tldextract, streamlit as st, altair as alt
 from dateutil import parser as dtp
@@ -28,7 +28,7 @@ SYNONYMS = {
     "systematic": ["systematic review","meta-analysis","evidence synthesis"],
 }
 
-# ----- utils -----
+# ---------- utils ----------
 def _fetch(url: str, timeout=8) -> str:
     try:
         r = requests.get(url, timeout=timeout, headers={"User-Agent":"Golgi/1.0"}); r.raise_for_status()
@@ -72,8 +72,7 @@ def _og_image(url: str) -> str | None:
         return None
 
 def _domain(url: str) -> str:
-    ext = tldextract.extract(url)
-    return ".".join([p for p in [ext.domain, ext.suffix] if p])
+    ext = tldextract.extract(url); return ".".join([p for p in [ext.domain, ext.suffix] if p])
 
 def _expand_query(q: str) -> str:
     ql = q.lower()
@@ -112,7 +111,7 @@ def _download_blob(rows: list[dict], kind: str):
     for r in rows: w.writerow({k:r.get(k,"") for k in w.fieldnames})
     return "text/csv", buf.getvalue().encode()
 
-# ----- Exa -----
+# ---------- Exa ----------
 def _get_exa_key() -> str:
     key = os.getenv("EXA_API_KEY") or st.secrets.get("EXA_API_KEY", "")
     if not key:
@@ -120,8 +119,7 @@ def _get_exa_key() -> str:
     return key
 
 @st.cache_resource
-def _exa() -> Exa:
-    return Exa(api_key=_get_exa_key())
+def _exa() -> Exa: return Exa(api_key=_get_exa_key())
 
 @st.cache_data(show_spinner=False)
 def exa_search(query: str, num: int, since: str | None, mode: str):
@@ -160,7 +158,7 @@ def exa_overview(query: str, since: str|None, mode: str, max_citations: int) -> 
     cites = cites_all[:max(0, int(max_citations))]
     return {"answer": getattr(ans, "answer", "") or "", "citations": cites}
 
-# ----- UI -----
+# ---------- UI ----------
 st.set_page_config(page_title="Golgi — Research Mode", page_icon="🧬", layout="wide")
 st.title("Golgi — Healthcare Evidence Search")
 
@@ -170,7 +168,7 @@ with st.sidebar:
     since = st.text_input("Since (YYYY[-MM[-DD]])", "")
     k = st.slider("Results", 1, 50, 15)
     want_overview = st.checkbox("High-level overview", True)
-    # NEW: evidence type filter (multi)
+    # evidence-type filter
     all_types = ["Guideline","Systematic Review","Trial/Registry","Article/Other"]
     type_filter = st.multiselect("Filter by evidence type", options=all_types, default=all_types)
 
@@ -182,10 +180,10 @@ if run:
     with st.spinner("Searching…"):
         rows = exa_search(q, num=int(k), since=since.strip() or None, mode=mode)
 
-    # apply evidence-type filter
+    # filter by evidence type
     rows = [r for r in rows if r["type"] in type_filter]
 
-    # overview (limit citations to slider k)
+    # overview
     if want_overview:
         with st.status("Generating overview…", expanded=False) as s:
             ov = exa_overview(q, since=since.strip() or None, mode=mode, max_citations=int(k))
@@ -197,26 +195,23 @@ if run:
             for c in ov["citations"]:
                 st.markdown(f"- [{c['title']}]({c['url']})")
 
-    # stats
+    # metrics (no guidelines metric)
     st.subheader("Stats")
     total = len(rows)
-    types, years, domains = {}, {}, {}
-    for r in rows:
-        types[r["type"]] = types.get(r["type"], 0) + 1
-        y = _year_from(r["published"]); 
-        if y: years[y] = years.get(y, 0) + 1
-        d = _domain(r["url"]); domains[d] = domains.get(d, 0) + 1
     avg_score = round(sum(r["score"] for r in rows)/total, 3) if rows else 0.0
-    m1, m2, m3 = st.columns(3)
+    m1, m2 = st.columns(2)
     m1.metric("Results", total)
     m2.metric("Avg confidence", avg_score)
-    m3.metric("Guidelines", types.get("Guideline", 0))
 
-    # charts (pie + bars; guard empties)
+    # analytics: pie (type), bar (domains), line (confidence)
     st.subheader("Analytics")
-    cols = st.columns(3)
+    # aggregate
+    types, domains = {}, {}
+    for r in rows:
+        types[r["type"]] = types.get(r["type"], 0) + 1
+        d = _domain(r["url"]); domains[d] = domains.get(d, 0) + 1
 
-    # Pie: evidence type distribution
+    cols = st.columns(3)
     pie_data = [{"type": k, "count": v} for k, v in sorted(types.items(), key=lambda x: -x[1])]
     if pie_data:
         pie = alt.Chart(alt.Data(values=pie_data)).mark_arc(outerRadius=110).encode(
@@ -228,7 +223,6 @@ if run:
     else:
         cols[0].info("No type data")
 
-    # Domain bar
     dom_data = [{"domain":k, "count":v} for k,v in sorted(domains.items(), key=lambda x:-x[1])[:20]]
     if dom_data:
         dom_chart = alt.Chart(alt.Data(values=dom_data)).mark_bar().encode(
@@ -240,7 +234,6 @@ if run:
     else:
         cols[1].info("No domain data")
 
-    # Score curve
     sc_data = [{"rank": i+1, "score": float(r["score"])} for i,r in enumerate(rows)]
     if sc_data:
         sc_chart = alt.Chart(alt.Data(values=sc_data)).mark_line(point=True).encode(
@@ -252,12 +245,12 @@ if run:
     else:
         cols[2].info("No score data")
 
-    # exports
+    # export
     st.subheader("Export")
     mime, blob = _download_blob(rows, "json"); st.download_button("Download JSON", data=blob, file_name="golgi_results.json", mime=mime)
     mime, blob = _download_blob(rows, "csv");  st.download_button("Download CSV",  data=blob, file_name="golgi_results.csv",  mime=mime)
 
-    # results
+    # results (images kept)
     st.subheader("Results")
     if not rows: st.info("No results.")
     for i, r in enumerate(rows, 1):
