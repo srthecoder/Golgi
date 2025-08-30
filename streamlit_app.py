@@ -173,54 +173,37 @@ with st.sidebar:
 import base64, textwrap
 from pathlib import Path
 
+# --- DROP-IN FIX: render hero via components (no Markdown parsing → no code block) ---
+import base64
+from pathlib import Path
+from streamlit.components.v1 import html as st_html
+
 def render_hero(logo_path="assets/logo.png", width_px=320, tagline="Making healthcare searchable"):
-    p = (Path(__file__).resolve().parent / logo_path)
+    p = Path(logo_path)
     if not p.exists():
-        p = Path(logo_path)
+        st.error(f"Logo not found: {logo_path}")
+        return
+    b64 = base64.b64encode(p.read_bytes()).decode()
 
-    css = f"""
-    <style>
-      .golgi-hero {{
-          text-align:center;
-          margin: 0; padding: 0;
-      }}
-      .golgi-hero img {{
-          width:{width_px}px !important;
-          height:auto;
-          display:inline-block;
-          margin-bottom: 6px;   /* tighten gap */
-      }}
-      .golgi-tagline {{
-          text-align:center;
-          font-size:1.05rem;
-          color:#444;
-          margin: 0 0 8px 0;   /* smaller bottom margin */
-      }}
-      /* reduce Streamlit default block spacing */
-      .block-container > div:nth-child(2) {{
-          padding-top: 0 !important;
-          margin-top: 0 !important;
-      }}
-    </style>
-    """
+    st_html(
+        f"""
+<!DOCTYPE html>
+<div style="text-align:center;margin:0;padding:0;">
+  <img src="data:image/png;base64,{b64}" alt="Golgi logo"
+       style="width:{width_px}px;height:auto;margin:0 0 6px 0;display:inline-block;" />
+  <div style="font: 500 1.05rem/1.2 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Inter,Helvetica,Arial;
+              color:#444;margin:0 0 8px 0;">
+    {tagline}
+  </div>
+</div>
+        """,
+        height=int(width_px * 0.6) + 40,  # adjust if you change width_px
+    )
 
-    if p.exists():
-        b64 = base64.b64encode(p.read_bytes()).decode()
-        html = f"""
-        {css}
-        <div class="golgi-hero">
-          <img src="data:image/png;base64,{b64}" alt="Golgi logo"/>
-        </div>
-        <div class="golgi-tagline">{tagline}</div>
-        """
-        st.markdown(textwrap.dedent(html), unsafe_allow_html=True)
-    else:
-        st.warning(f"Logo not found at {logo_path}.")
-        st.markdown(css + f"<div class='golgi-tagline'>{tagline}</div>", unsafe_allow_html=True)
+# Call this right ABOVE your search input; remove any extra markdown title/tagline around it.
+render_hero("assets/logo.png", width_px=340)
 
-# call it right above the search input
-render_hero("assets/logo.png", width_px=320)
-
+# search bar 
 base_q = st.text_input(" ", placeholder="SGLT2 inhibitors CKD stage 3")
 q = f"{base_q} {' '.join(chips)}".strip()
 run = st.button("Search", type="primary", use_container_width=True)
