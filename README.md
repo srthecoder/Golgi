@@ -5,7 +5,7 @@
 **Making healthcare searchable.**  
 
 [Golgi](https://goooolgi.streamlit.app/) is a Streamlit-based custom search engine for clinicians and researchers.  
-It leverages [Exa](https://exa.ai) to query medical & scientific evidence, then enhances the results with filtering, confidence scoring, and rich visual analytics.  
+It leverages LLM-powered search API to query medical & scientific evidence, then enhances the results with filtering, confidence scoring, and rich visual analytics.  
 
 The Golgi apparatus in cells acts as a sorting, packaging, and distribution center for proteins. Similarly, Golgi the search engine acts as a distribution center for medical knowledge: sorting, organizing, and routing the right information to the right user at the right time.
 
