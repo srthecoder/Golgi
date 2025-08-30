@@ -7,25 +7,25 @@ from readability import Document
 from bs4 import BeautifulSoup
 from rank_bm25 import BM25Okapi
 
-# -------- page config --------
-st.set_page_config(page_title="Golgi — Healthcare Evidence Search", page_icon="assets/logo.png", layout="wide")
-st.markdown("""
-<style>
-/* main layout: centered content area; keep sidebar */
-.block-container{max-width:1100px;margin:0 auto;padding-top:3%;}
-/* clean logo (no rounding/shadow) */
-.stImage img{border-radius:0!important; box-shadow:none!important;}
-/* googley input/button */
-.stTextInput > div > div > input{
-  font-size:1.15rem; padding:.8rem 1.2rem; border-radius:28px; text-align:center;
-}
-.stButton>button{
-  font-size:1.05rem; padding:.6rem 2.2rem; border-radius:28px; background:#ef4444; color:#fff; border:0;
-}
-h1,h2,h3{text-align:center}
-.card{text-align:left}
-</style>
-""", unsafe_allow_html=True)
+# # -------- page config --------
+# st.set_page_config(page_title="Golgi — Healthcare Evidence Search", page_icon="assets/logo.png", layout="wide")
+# st.markdown("""
+# <style>
+# /* main layout: centered content area; keep sidebar */
+# .block-container{max-width:1100px;margin:0 auto;padding-top:3%;}
+# /* clean logo (no rounding/shadow) */
+# .stImage img{border-radius:0!important; box-shadow:none!important;}
+# /* googley input/button */
+# .stTextInput > div > div > input{
+#   font-size:1.15rem; padding:.8rem 1.2rem; border-radius:28px; text-align:center;
+# }
+# .stButton>button{
+#   font-size:1.05rem; padding:.6rem 2.2rem; border-radius:28px; background:#ef4444; color:#fff; border:0;
+# }
+# h1,h2,h3{text-align:center}
+# .card{text-align:left}
+# </style>
+# """, unsafe_allow_html=True)
 
 
 CLINICAL_ALLOW = [
@@ -190,7 +190,20 @@ with st.sidebar:
     all_types = ["Guideline","Systematic Review","Trial/Registry","Article/Other"]
     type_filter = st.multiselect("Filter by evidence type", options=all_types, default=all_types)
 
-# st.image("assets/logo.png", width=220)
+# === HERO: big centered logo above search ===
+st.markdown("""
+<style>
+.golgi-hero { text-align:center; margin-top:8px; margin-bottom:10px; }
+.golgi-hero img { width:300px; max-width:45vw; height:auto; }  /* tweak width as needed */
+.golgi-tagline { text-align:center; font-size:1.1rem; color:#444; margin-bottom:18px; }
+</style>
+<div class="golgi-hero">
+  <img src="assets/logo.png" alt="Golgi logo"/>
+</div>
+<div class="golgi-tagline">Making healthcare searchable</div>
+""", unsafe_allow_html=True)
+
+# search bar
 st.markdown("#### Making healthcare searchable")
 base_q = st.text_input("Query", placeholder="SGLT2 inhibitors CKD stage 3")
 q = f"{base_q} {' '.join(chips)}".strip()
