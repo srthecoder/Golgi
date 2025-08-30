@@ -175,30 +175,50 @@ from pathlib import Path
 
 def render_hero(logo_path="assets/logo.png", width_px=320, tagline="Making healthcare searchable"):
     p = (Path(__file__).resolve().parent / logo_path)
-    if not p.exists(): p = Path(logo_path)
-    css = """
-<style>
-.golgi-hero { text-align:center; margin: 8px 0 14px; }
-.golgi-hero img { width:WIDTHpx !important; height:auto; display:inline-block; }
-.golgi-tagline { text-align:center; font-size:1.1rem; color:#444; margin-bottom:18px; }
-</style>
-""".replace("WIDTH", str(width_px))
+    if not p.exists():
+        p = Path(logo_path)
+
+    css = f"""
+    <style>
+      .golgi-hero {{
+          text-align:center;
+          margin: 0; padding: 0;
+      }}
+      .golgi-hero img {{
+          width:{width_px}px !important;
+          height:auto;
+          display:inline-block;
+          margin-bottom: 6px;   /* tighten gap */
+      }}
+      .golgi-tagline {{
+          text-align:center;
+          font-size:1.05rem;
+          color:#444;
+          margin: 0 0 8px 0;   /* smaller bottom margin */
+      }}
+      /* reduce Streamlit default block spacing */
+      .block-container > div:nth-child(2) {{
+          padding-top: 0 !important;
+          margin-top: 0 !important;
+      }}
+    </style>
+    """
 
     if p.exists():
         b64 = base64.b64encode(p.read_bytes()).decode()
         html = f"""
-{css}
-<div class="golgi-hero">
-<img src="data:image/png;base64,{b64}" alt="Golgi logo"/>
-</div>
-<div class="golgi-tagline">{tagline}</div>
-"""
+        {css}
+        <div class="golgi-hero">
+          <img src="data:image/png;base64,{b64}" alt="Golgi logo"/>
+        </div>
+        <div class="golgi-tagline">{tagline}</div>
+        """
         st.markdown(textwrap.dedent(html), unsafe_allow_html=True)
     else:
         st.warning(f"Logo not found at {logo_path}.")
-        st.markdown(textwrap.dedent(css + f"<div class='golgi-tagline'>{tagline}</div>"), unsafe_allow_html=True)
+        st.markdown(css + f"<div class='golgi-tagline'>{tagline}</div>", unsafe_allow_html=True)
 
-# call it right above the search input (and REMOVE your extra H4 tagline below)
+# call it right above the search input
 render_hero("assets/logo.png", width_px=320)
 
 base_q = st.text_input(" ", placeholder="SGLT2 inhibitors CKD stage 3")
