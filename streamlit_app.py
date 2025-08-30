@@ -179,9 +179,7 @@ def exa_overview(query: str, since: str|None, mode: str, max_citations: int) -> 
     return {"answer": getattr(ans, "answer", "") or "", "citations": cites}
 
 # ---------- UI ----------
-st.set_page_config(page_title="Golgi — Research Mode", page_icon="🧬", layout="wide")
-st.title("Golgi — Healthcare Evidence Search")
-
+# -------- MAIN: clean landing --------
 with st.sidebar:
     mode = st.radio("Mode", ["Clinical (strict)","Scholar (broad)"], index=0)
     chips = st.multiselect("Quick terms", ["guideline","systematic review","randomized controlled trial","contraindications","pregnancy","perioperative","dose"], default=["guideline"])
@@ -191,6 +189,11 @@ with st.sidebar:
     # evidence-type filter
     all_types = ["Guideline","Systematic Review","Trial/Registry","Article/Other"]
     type_filter = st.multiselect("Filter by evidence type", options=all_types, default=all_types)
+
+# st.image("assets/logo.png", width=220)
+st.markdown("#### Making healthcare searchable")
+query = st.text_input(" ", placeholder="SGLT2 inhibitors CKD stage 3")
+run = st.button("Search")
 
 base_q = st.text_input("Query", placeholder="SGLT2 inhibitors CKD stage 3")
 q = f"{base_q} {' '.join(chips)}".strip()
