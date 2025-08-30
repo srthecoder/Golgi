@@ -7,29 +7,25 @@ from readability import Document
 from bs4 import BeautifulSoup
 from rank_bm25 import BM25Okapi
 
-# --- page config ---
-st.set_page_config(page_title="Golgi", page_icon="assets/logo.png", layout="centered")
-
-# --- custom CSS for centering ---
+# -------- page config --------
+st.set_page_config(page_title="Golgi — Healthcare Evidence Search", page_icon="assets/logo.png", layout="wide")
 st.markdown("""
-    <style>
-    .block-container {padding-top: 5%; text-align: center;}
-    .stTextInput > div > div > input {
-        font-size: 1.2rem; padding: 0.6rem;
-        border-radius: 20px; border: 1px solid #ccc;
-        text-align: center;
-    }
-    .stButton>button {
-        font-size: 1.1rem; padding: 0.5rem 2rem;
-        border-radius: 20px; background-color: #ef4444; color: white;
-        border: none;
-    }
-    </style>
+<style>
+/* main layout: centered content area; keep sidebar */
+.block-container{max-width:1100px;margin:0 auto;padding-top:3%;}
+/* clean logo (no rounding/shadow) */
+.stImage img{border-radius:0!important; box-shadow:none!important;}
+/* googley input/button */
+.stTextInput > div > div > input{
+  font-size:1.15rem; padding:.8rem 1.2rem; border-radius:28px; text-align:center;
+}
+.stButton>button{
+  font-size:1.05rem; padding:.6rem 2.2rem; border-radius:28px; background:#ef4444; color:#fff; border:0;
+}
+h1,h2,h3{text-align:center}
+.card{text-align:left}
+</style>
 """, unsafe_allow_html=True)
-
-# --- header ---
-st.image("assets/logo.png", width=220)
-st.markdown("### Making healthcare searchable")
 
 
 CLINICAL_ALLOW = [
@@ -183,8 +179,11 @@ def exa_overview(query: str, since: str|None, mode: str, max_citations: int) -> 
     return {"answer": getattr(ans, "answer", "") or "", "citations": cites}
 
 # ---------- UI ----------
-st.set_page_config(page_title="Golgi — Research Mode", page_icon="🧬", layout="wide")
-st.title("Golgi — Healthcare Evidence Search")
+# -------- MAIN: clean landing --------
+st.image("assets/logo.png", width=220)
+st.markdown("#### Making healthcare searchable")
+query = st.text_input(" ", placeholder="SGLT2 inhibitors CKD stage 3")
+run = st.button("Search")
 
 with st.sidebar:
     mode = st.radio("Mode", ["Clinical (strict)","Scholar (broad)"], index=0)
