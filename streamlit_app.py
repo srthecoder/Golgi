@@ -170,6 +170,7 @@ with st.sidebar:
     type_filter = st.multiselect("Filter by evidence type", options=all_types, default=all_types)
 
 # === HERO: big centered logo above search ===
+# --- HERO: big centered logo above search (works locally + Streamlit Cloud) ---
 import base64
 from pathlib import Path
 
@@ -181,27 +182,25 @@ def render_hero(logo_path="assets/logo.png", width_px=320, tagline="Making healt
       .golgi-tagline {{ text-align:center; font-size:1.1rem; color:#444; margin-bottom:18px; }}
     </style>
     """
-    # resolve relative to this file; fallback to CWD
     p = (Path(__file__).resolve().parent / logo_path)
     if not p.exists():
         p = Path(logo_path)
 
     if p.exists():
         b64 = base64.b64encode(p.read_bytes()).decode()
-        st.markdown(
-            css + f"""
-            <div class="golgi-hero">
-              <img src="data:image/png;base64,{b64}" alt="Golgi logo"/>
-            </div>
-            <div class="golgi-tagline">{tagline}</div>
-            """,
-            unsafe_allow_html=True,
-        )
+        html = f"""
+        {css}
+        <div class="golgi-hero">
+          <img src="data:image/png;base64,{b64}" alt="Golgi logo"/>
+        </div>
+        <div class="golgi-tagline">{tagline}</div>
+        """
+        st.markdown(html, unsafe_allow_html=True)   # <-- important
     else:
-        st.warning(f"Logo not found at {logo_path}.")
-        st.markdown(f"<div class='golgi-tagline'>{tagline}</div>", unsafe_allow_html=True)
+        st.warning(f"Logo not found at {logo_path}. Commit the file to your repo.")
+        st.markdown(css + f"<div class='golgi-tagline'>{tagline}</div>", unsafe_allow_html=True)
 
-# render it here:
+# call it right above the search input:
 render_hero("assets/logo.png", width_px=320)
 
 # search bar
