@@ -4,3 +4,6 @@ readability-lxml
 beautifulsoup4
 rank-bm25
 requests
+altair 
+tldextract 
+python-dateutil
