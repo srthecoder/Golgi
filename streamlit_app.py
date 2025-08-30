@@ -169,43 +169,39 @@ with st.sidebar:
     all_types = ["Guideline","Systematic Review","Trial/Registry","Article/Other"]
     type_filter = st.multiselect("Filter by evidence type", options=all_types, default=all_types)
 
-# === HERO: big centered logo above search ===
-# --- HERO: big centered logo above search (works locally + Streamlit Cloud) ---
-import base64
+# === HERO (no leading indentation → no code block) ===
+import base64, textwrap
 from pathlib import Path
 
 def render_hero(logo_path="assets/logo.png", width_px=320, tagline="Making healthcare searchable"):
-    css = f"""
-    <style>
-      .golgi-hero {{ text-align:center; margin: 8px 0 14px; }}
-      .golgi-hero img {{ width:{width_px}px !important; height:auto; display:inline-block; }}
-      .golgi-tagline {{ text-align:center; font-size:1.1rem; color:#444; margin-bottom:18px; }}
-    </style>
-    """
     p = (Path(__file__).resolve().parent / logo_path)
-    if not p.exists():
-        p = Path(logo_path)
+    if not p.exists(): p = Path(logo_path)
+    css = """
+<style>
+.golgi-hero { text-align:center; margin: 8px 0 14px; }
+.golgi-hero img { width:WIDTHpx !important; height:auto; display:inline-block; }
+.golgi-tagline { text-align:center; font-size:1.1rem; color:#444; margin-bottom:18px; }
+</style>
+""".replace("WIDTH", str(width_px))
 
     if p.exists():
         b64 = base64.b64encode(p.read_bytes()).decode()
         html = f"""
-        {css}
-        <div class="golgi-hero">
-          <img src="data:image/png;base64,{b64}" alt="Golgi logo"/>
-        </div>
-        <div class="golgi-tagline">{tagline}</div>
-        """
-        st.markdown(html, unsafe_allow_html=True)   # <-- important
+{css}
+<div class="golgi-hero">
+<img src="data:image/png;base64,{b64}" alt="Golgi logo"/>
+</div>
+<div class="golgi-tagline">{tagline}</div>
+"""
+        st.markdown(textwrap.dedent(html), unsafe_allow_html=True)
     else:
-        st.warning(f"Logo not found at {logo_path}. Commit the file to your repo.")
-        st.markdown(css + f"<div class='golgi-tagline'>{tagline}</div>", unsafe_allow_html=True)
+        st.warning(f"Logo not found at {logo_path}.")
+        st.markdown(textwrap.dedent(css + f"<div class='golgi-tagline'>{tagline}</div>"), unsafe_allow_html=True)
 
-# call it right above the search input:
+# call it right above the search input (and REMOVE your extra H4 tagline below)
 render_hero("assets/logo.png", width_px=320)
 
-# search bar
-st.markdown("#### Making healthcare searchable")
-base_q = st.text_input("Query", placeholder="SGLT2 inhibitors CKD stage 3")
+base_q = st.text_input(" ", placeholder="SGLT2 inhibitors CKD stage 3")
 q = f"{base_q} {' '.join(chips)}".strip()
 run = st.button("Search", type="primary", use_container_width=True)
 
