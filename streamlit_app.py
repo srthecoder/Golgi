@@ -136,14 +136,26 @@ def exa_search(query: str, num: int, since: str|None, mode: str):
 def exa_overview(query: str, since: str|None, mode: str) -> dict:
     exa = _exa()
     opts = dict(query=query, text=True)
-    if since: opts["start_published_date"] = since
-    if mode.startswith("Clinical"):
-        opts["include_domains"] = CLINICAL_ALLOW
-    else:
-        opts["exclude_domains"] = EXCLUDE_JUNK
-    ans = exa.answer(**opts)
-    cites = [{"title": c.title, "url": c.url} for c in (ans.citations or [])]
-    return {"answer": ans.answer or "", "citations": cites}
+    if since:
+        opts["start_published_date"] = since
+    try:
+        if mode.startswith("Clinical"):
+            opts["include_domains"] = CLINICAL_ALLOW
+        else:
+            opts["exclude_domains"] = EXCLUDE_JUNK
+        ans = exa.answer(**opts)
+        cites = [{"title": c.title, "url": c.url} for c in (ans.citations or [])]
+        return {"answer": ans.answer or "", "citations": cites}
+    except Exception as e:
+        # Fallback: no domain filters, safer
+        st.warning(f"Overview failed with filters: {e}")
+        try:
+            ans = exa.answer(query=query, text=True)
+            cites = [{"title": c.title, "url": c.url} for c in (ans.citations or [])]
+            return {"answer": ans.answer or "", "citations": cites}
+        except Exception as e2:
+            st.error(f"Overview completely failed: {e2}")
+            return {"answer": "", "citations": []}
 
 # ------------ UI ------------
 st.set_page_config(page_title="Golgi — Healthcare Evidence Search", page_icon="🧬", layout="wide")
