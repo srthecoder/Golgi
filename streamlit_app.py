@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-st.set_page_config(
-    page_title="Golgi — Making healthcare searchable",
-    page_icon="assets/logo.png",   # favicon
-    layout="wide"
-)
-
-st.image("assets/logo.png", width=160)
-st.title("Golgi — Making healthcare searchable")
-
 from __future__ import annotations
 import os, re, io, json, csv, requests, tldextract, streamlit as st, altair as alt
 from dateutil import parser as dtp
@@ -15,6 +6,17 @@ from exa_py import Exa
 from readability import Document
 from bs4 import BeautifulSoup
 from rank_bm25 import BM25Okapi
+
+# --- page setup ---
+st.set_page_config(
+    page_title="Golgi — Making healthcare searchable",
+    page_icon="assets/logo.png",   # favicon
+    layout="wide"
+)
+
+# --- header branding ---
+st.image("assets/logo.png", width=160)
+st.title("Golgi — Making healthcare searchable")
 
 CLINICAL_ALLOW = [
     "nih.gov","ncbi.nlm.nih.gov","pubmed.ncbi.nlm.nih.gov","cdc.gov","who.int",
