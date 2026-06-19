@@ -16,7 +16,9 @@
       "Bash(curl -s \"https://iris.who.int/rest/collections\" -H \"Accept: application/json\" -o /dev/null -w \"%{http_code}\\\\n\")",
       "Bash(curl -s \"https://iris.who.int/server/api/discover/search/objects?query=diabetes+treatment&size=3\" -H \"Accept: application/json\" -o /dev/null -w \"%{http_code}\\\\n\")",
       "Bash(curl -s \"https://iris.who.int/server/api/discover/search/objects?query=diabetes+treatment&size=3\" -H \"Accept: application/json\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -m pip install langchain langchain-community chromadb sentence-transformers -q)",
+      "Bash(python3 -c \"import chromadb, sentence_transformers, langchain; print\\('all deps ok'\\)\")"
     ]
   }
 }
