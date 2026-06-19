@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+exa_py
+readability-lxml
+beautifulsoup4
+rank-bm25
+requests

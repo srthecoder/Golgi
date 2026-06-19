@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Golgi — Healthcare Evidence Search</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Golgi</h1>
+    <div class="row">
+      <input id="q" placeholder="SGLT2 inhibitors CKD 2024 guideline" />
+      <button id="go">Search</button>
+    </div>
+    <ul id="list"></ul>
+  </main>
+  <script>
+    const q = document.getElementById('q');
+    const btn = document.getElementById('go');
+    const list = document.getElementById('list');
+    btn.onclick = async () => {
+      list.innerHTML = '<li class="muted">Searching…</li>';
+      const r = await fetch(`/api/search?q=${encodeURIComponent(q.value)}&max=8`);
+      const data = await r.json();
+      list.innerHTML = '';
+      (data || []).forEach(it => {
+        const li = document.createElement('li');
+        li.className = 'card';
+        li.innerHTML = `
+          <a href="${it.url}" target="_blank" class="title">${it.title || it.url}</a>
+          <div class="meta">${it.published || ''}</div>
+          <p>${(it.summary || '').slice(0, 500)}</p>
+        `;
+        list.appendChild(li);
+      });
+      if (!list.children.length) list.innerHTML = '<li class="muted">No results.</li>';
+    };
+  </script>
+</body>
+</html>

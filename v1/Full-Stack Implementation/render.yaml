@@ -1,0 +1,9 @@
+services:
+- type: web
+  name: golgi
+  env: docker
+  plan: free
+  autoDeploy: true
+  envVars:
+  - key: EXA_API_KEY
+    sync: false
