@@ -57,60 +57,54 @@ def chunk_documents(
     return chunks
 
 
+FAISS_INDEX_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "processed", "faiss.index")
+CHUNKS_META_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "processed", "chunks_metadata.json")
+
+
 def embed_and_store(
     chunks: list[dict[str, Any]],
     collection_name: str = "golgi",
 ):
-    """Embed chunks with all-MiniLM-L6-v2 and persist them in ChromaDB.
+    """Embed chunks with all-MiniLM-L6-v2, build a FAISS IndexFlatIP index, and persist to disk.
+
+    Vectors are L2-normalised before adding so inner product equals cosine similarity.
 
     Args:
         chunks: Output of chunk_documents().
-        collection_name: Name of the ChromaDB collection.
+        collection_name: Unused; kept for API compatibility.
 
     Returns:
-        The ChromaDB collection object.
+        The faiss index object.
     """
-    import chromadb
-    from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+    import json
 
-    os.makedirs(CHROMA_PERSIST_DIR, exist_ok=True)
-
-    embed_fn = SentenceTransformerEmbeddingFunction(model_name=EMBED_MODEL_NAME)
-
-    client = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
-
-    # Get or create collection — wipe and recreate so re-runs don't duplicate
-    try:
-        client.delete_collection(collection_name)
-        logger.info("Deleted existing collection '%s'", collection_name)
-    except Exception:
-        pass
-
-    collection = client.create_collection(
-        name=collection_name,
-        embedding_function=embed_fn,
-        metadata={"hnsw:space": "cosine"},
-    )
+    import faiss
+    import numpy as np
+    from sentence_transformers import SentenceTransformer
 
     if not chunks:
         logger.warning("embed_and_store called with empty chunk list")
-        return collection
+        return None
 
-    # ChromaDB requires unique string IDs
-    ids = [f"chunk_{i}" for i in range(len(chunks))]
+    os.makedirs(os.path.dirname(FAISS_INDEX_PATH), exist_ok=True)
+
+    model = SentenceTransformer(EMBED_MODEL_NAME)
     texts = [c["chunk_text"] for c in chunks]
-    metadatas = [c["metadata"] for c in chunks]
 
-    # Add in batches to avoid memory spikes on large corpora
-    batch_size = 100
-    for start in range(0, len(chunks), batch_size):
-        end = start + batch_size
-        collection.add(
-            ids=ids[start:end],
-            documents=texts[start:end],
-            metadatas=metadatas[start:end],
-        )
-        logger.debug("Stored batch %d–%d", start, min(end, len(chunks)))
+    logger.info("Embedding %d chunks with %s...", len(chunks), EMBED_MODEL_NAME)
+    vectors = model.encode(texts, show_progress_bar=True, convert_to_numpy=True).astype("float32")
 
-    logger.info("embed_and_store: stored %d chunks in collection '%s'", len(chunks), collection_name)
-    return collection
+    faiss.normalize_L2(vectors)
+
+    dim = vectors.shape[1]
+    index = faiss.IndexFlatIP(dim)
+    index.add(vectors)
+
+    faiss.write_index(index, FAISS_INDEX_PATH)
+    logger.info("FAISS index saved to %s (%d vectors, dim=%d)", FAISS_INDEX_PATH, index.ntotal, dim)
+
+    with open(CHUNKS_META_PATH, "w", encoding="utf-8") as f:
+        json.dump(chunks, f, ensure_ascii=False)
+    logger.info("Chunk metadata saved to %s", CHUNKS_META_PATH)
+
+    return index

@@ -18,7 +18,21 @@
       "Bash(curl -s \"https://iris.who.int/server/api/discover/search/objects?query=diabetes+treatment&size=3\" -H \"Accept: application/json\")",
       "Bash(python3 -c ' *)",
       "Bash(python3 -m pip install langchain langchain-community chromadb sentence-transformers -q)",
-      "Bash(python3 -c \"import chromadb, sentence_transformers, langchain; print\\('all deps ok'\\)\")"
+      "Bash(python3 -c \"import chromadb, sentence_transformers, langchain; print\\('all deps ok'\\)\")",
+      "Bash(python3 -m pip install rank-bm25 -q)",
+      "Bash(python3 -c \"from rank_bm25 import BM25Okapi; print\\('ok'\\)\")",
+      "Bash(python3 -m pip install faiss-cpu -q)",
+      "Bash(python3 -c \"import faiss; print\\('faiss ok, version', faiss.__version__\\)\")",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(python3 -)",
+      "Bash(python3 -m pip install anthropic -q)",
+      "Bash(python3 -m pip install google-generativeai -q)",
+      "Bash(GOOGLE_API_KEY=\"AIzaSyDH9RtSfXH8rHBZwsgI60yrWbH1coU0PtM\" python3 -)",
+      "Bash(python3 -m pip install google-genai -q)",
+      "Bash(python3 -m pip install streamlit -q)",
+      "Bash(python3 -c \"import streamlit; print\\('streamlit', streamlit.__version__\\)\")",
+      "Bash(GOOGLE_API_KEY=AIzaSyDH9RtSfXH8rHBZwsgI60yrWbH1coU0PtM python3 -c ' *)"
     ]
   }
 }

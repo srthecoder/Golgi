@@ -1,8 +1,8 @@
-anthropic
+google-genai
 langchain
-langchain-anthropic
+langchain-google-genai
 langchain-community
-chromadb
+faiss-cpu
 sentence-transformers
 rank-bm25
 streamlit
