@@ -1,7 +1,22 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(python3 -m pip install httpx -q)",
+      "Bash(python3 -c \"import httpx; print\\('httpx ok'\\)\")",
+      "Bash(curl -s \"https://api.fda.gov/drug/label.json?search=diabetes&limit=2\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(list\\(d.keys\\(\\)\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://iris.who.int/rest/search?query=diabetes&rpp=2\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://iris.who.int/oai/request?verb=ListRecords&metadataPrefix=oai_dc\")",
+      "Bash(curl -s \"https://api.fda.gov/drug/label.json?search=indications_and_usage:diabetes+treatment&limit=3\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(r.get\\('openfda',{}\\).get\\('brand_name',['?']\\)[0], '|', r.get\\('indications_and_usage',['']\\)[0][:60]\\) for r in d.get\\('results',[]\\)]\")",
+      "Bash(curl -s \"https://iris.who.int/oai/request?verb=ListRecords&metadataPrefix=oai_dc&set=diabetes\" -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s -L \"https://iris.who.int/discover?query=diabetes+treatment&rpp=5\" -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s \"https://iris.who.int/rest/items?expand=metadata&limit=3&offset=0\" -H \"Accept: application/json\" -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s \"https://iris.who.int/rest/collections\" -H \"Accept: application/json\" -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s \"https://iris.who.int/server/api/discover/search/objects?query=diabetes+treatment&size=3\" -H \"Accept: application/json\" -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s \"https://iris.who.int/server/api/discover/search/objects?query=diabetes+treatment&size=3\" -H \"Accept: application/json\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }
